@@ -12,15 +12,20 @@ import pandas as pd
 COLUMNS = ["日期", "对手", "局", "球次", "队伍", "号码", "环节", "效果",
            "进攻方式", "落点区域", "轮次", "备注"]
 
-# 六环节 -> 合法效果（二级联动，与 v2 _配置 表一致）
+# 六环节 -> 合法效果（二级联动）
+# 一传四级口径对齐 Data Volley / FIVB：到位(Perfect #)/半到位(Medium +)/破攻(Out-of-system)/失误(Error)
 EFFECT_MAP = {
     "发球": ["ACE得分", "破攻", "一般", "失误"],
-    "一传": ["到位", "半到位", "无攻过网", "失误"],
+    "一传": ["到位", "半到位", "破攻", "失误"],
     "二传": ["到位", "调整", "失误"],
     "扣球": ["得分", "被防起", "被拦回", "被拦死", "失误"],
     "拦网": ["拦死", "拦回", "拦起", "失误"],
     "防守": ["起球到位", "起球无攻", "防失"],
 }
+# 一传历史/旧口径 -> 标准四级 兼容映射（"一般"为过渡用词，统一并入半到位）
+RECEPTION_ALIAS = {"一般": "半到位", "无攻过网": "破攻"}
+# 需要记录落点区域的环节
+ZONE_PHASES = ["发球", "扣球"]
 # 仅扣球环节出现的进攻方式（与 v2 一致）
 ATTACK_TYPES = ["4号位", "3号位快球", "2号位快变", "后排攻",
                 "二次球", "吊球", "探头", "处理球"]
@@ -77,15 +82,19 @@ def _serve(df: pd.DataFrame) -> dict:
 
 
 def _reception(df: pd.DataFrame) -> dict:
-    d = df[df["环节"] == "一传"]
+    d = df[df["环节"] == "一传"].copy()
+    # 历史/旧口径映射到标准四级
+    d["效果"] = d["效果"].replace(RECEPTION_ALIAS)
     n = len(d)
     good = (d["效果"] == "到位").sum()
-    half = (d["效果"] == "半到位").sum()
-    free = (d["效果"] == "无攻过网").sum()
+    fair = (d["效果"] == "半到位").sum()
+    poor = (d["效果"] == "破攻").sum()
     err = (d["效果"] == "失误").sum()
-    return {"次数": n, "到位": int(good), "半到位": int(half),
-            "无攻过网": int(free), "失误": int(err),
-            "到位率": round((good + half) / n, 3) if n else 0.0}
+    return {"次数": n, "到位": int(good), "半到位": int(fair), "破攻": int(poor),
+            "失误": int(err),
+            # 到位率（严格，对应FIVB Perfect%）；正效率=(到位+半到位)/总（对应FIVB Reception Positivity）
+            "到位率": round(good / n, 3) if n else 0.0,
+            "正效率": round((good + fair) / n, 3) if n else 0.0}
 
 
 def _spike(df: pd.DataFrame) -> dict:

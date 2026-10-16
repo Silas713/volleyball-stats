@@ -102,7 +102,12 @@ with tab_log:
             atk = f.selectbox("进攻方式", S.ATTACK_TYPES)
         else:
             atk = f.selectbox("进攻方式", ["—（本环节不填）"], disabled=True)
-        zone = g.selectbox("落点区域", [f"{i}区" for i in range(1, 7)])
+        # 落点区域仅发球、扣球记录
+        if phase in S.ZONE_PHASES:
+            zone = g.selectbox("落点区域", [f"{i}区" for i in range(1, 7)])
+        else:
+            zone = None
+            g.info("本环节无需记录落点区域")
         rotation = st.radio("轮次", S.ROTATIONS, horizontal=True)
         note = st.text_input("备注（可空）", "")
 
